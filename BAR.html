@@ -341,25 +341,12 @@ function b64toBlob(dataURI) {
 }
 
 function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
-  var timeStr = new Date(finishTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
-  var totalCups = (order.items || []).reduce(function(sum, it){ return sum + it.qty; }, 0);
+  // Lấy mã đơn nhập từ POS (nếu không có thì lấy số ID đơn)
+  var orderCodeStr = order.orderCode ? order.orderCode : ('#' + String(order.id).padStart(3, '0'));
+  var sourceStr = (order.orderSource || 'APP').toUpperCase();
 
-  var itemsText = (order.items || []).map(function(it){
-    var opt = it.optionsLabel ? ' (' + it.optionsLabel + ')' : '';
-    return '• ' + it.name + ' × ' + it.qty + opt;
-  }).join('\n');
-
-  var orderCodeStr = order.orderCode ? (' - Mã: ' + order.orderCode) : (' #' + String(order.id).padStart(3, '0'));
-
-  var caption = [
-    '🛵 ĐƠN ' + (order.orderSource || 'APP').toUpperCase() + orderCodeStr + ' — HOÀN TẤT',
-    '──────────',
-    itemsText,
-    '──────────',
-    '🥤 Tổng: ' + totalCups + ' ly',
-    '👤 Pha chế: ' + staff,
-    '🕐 Hoàn thành: ' + timeStr
-  ].join('\n');
+  // Caption rút gọn tối đa: chỉ gồm tên nguồn app và mã đơn
+  var caption = '📸 HÌNH ẢNH ĐƠN ' + sourceStr + ': ' + orderCodeStr;
 
   var formData = new FormData();
   formData.append('chat_id', TG_CHAT_ID);
@@ -380,7 +367,6 @@ function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
     markPendingTelegram(orderKey);
   });
 }
-
 function markPendingTelegram(orderKey) {
   var pending = JSON.parse(localStorage.getItem('pending_telegrams') || '[]');
   if (pending.indexOf(orderKey) === -1) {
