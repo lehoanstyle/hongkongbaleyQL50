@@ -49,7 +49,7 @@
   .oc-item-opts { font-size: 11px; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; padding-left: 8px; line-height: 1.25; }
   
   .photo-preview-wrap { margin-top: 8px; text-align: center; }
-  .photo-preview { width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+  .photo-preview { width: 100%; max-height: 280px; object-fit: cover; border-radius: 8px; border: 1.5px solid var(--pine); }
 
   .oc-actions { display: flex; gap: 6px; margin-top: 10px; }
   .oc-actions button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
@@ -125,7 +125,7 @@ function renderOrders() {
   var listEl = document.getElementById('ordersList');
   var keys = Object.keys(ordersMap);
 
-  // LỌC BỎ HOÀN TOÀN ĐƠN TẠI QUẦY (chỉ giữ đơn Grab, Shopee, Be, Xanh)
+  // Chỉ lấy đơn từ App (Grab, Shopee, Be, Xanh)
   var appKeys = keys.filter(function(k){
     var src = ordersMap[k].orderSource;
     return src && src !== 'store' && src !== 'Tại quầy';
@@ -169,7 +169,7 @@ function renderOrders() {
       statusBadge = '<span class="oc-badge badge-making">🟠 Đang làm</span>';
       statusClass = 'status-processing';
     } else if (status === 'wait_photo') {
-      statusBadge = '<span class="oc-badge badge-wait-photo">📷 Đã chụp ảnh</span>';
+      statusBadge = '<span class="oc-badge badge-wait-photo">📷 Đã gắn Timestamp</span>';
       statusClass = 'status-photo';
     } else if (status === 'completed') {
       statusBadge = '<span class="oc-badge badge-done">🟢 Hoàn tất</span>';
@@ -186,14 +186,13 @@ function renderOrders() {
       }
     });
 
-    // Đơn App bắt buộc phải có ảnh mới cho hoàn tất
     var actionHtml = '';
     if (status === 'new') {
       actionHtml = '<button type="button" class="btn-accept" onclick="updateOrderStatus(\'' + key + '\', \'accepted\')">🔵 Nhận đơn</button>';
     } else if (status === 'accepted') {
       actionHtml = '<button type="button" class="btn-making" onclick="updateOrderStatus(\'' + key + '\', \'making\')">🟠 Bắt đầu làm</button>';
     } else if (status === 'making') {
-      actionHtml = '<button type="button" class="btn-camera" onclick="triggerCamera(\'' + key + '\')">📷 Chụp ảnh thành phẩm (Bắt buộc)</button>';
+      actionHtml = '<button type="button" class="btn-camera" onclick="triggerCamera(\'' + key + '\')">📷 Chụp ảnh thành phẩm</button>';
     } else if (status === 'wait_photo') {
       actionHtml = '<button type="button" class="btn-camera-retake" onclick="triggerCamera(\'' + key + '\')">Chụp lại</button>' +
                    '<button type="button" class="btn-complete" onclick="finishOrder(\'' + key + '\')">✅ HOÀN TẤT &amp; GỬI TELEGRAM</button>';
@@ -206,9 +205,12 @@ function renderOrders() {
       photoHtml = '<div class="photo-preview-wrap"><img src="' + o.photoBase64 + '" class="photo-preview" alt="Ảnh thành phẩm"></div>';
     }
 
+    // Hiển thị mã đơn app được nhập từ POS
+    var displayOrderCode = o.orderCode ? (' [MÃ: ' + escapeHtml(o.orderCode) + ']') : '';
+
     html += '<div class="order-card ' + statusClass + '">' +
               '<div class="oc-header">' +
-                '<span class="oc-id">Đơn #' + String(o.id).padStart(3, '0') + (o.orderCode ? ' [' + escapeHtml(o.orderCode) + ']' : '') + '</span>' +
+                '<span class="oc-id">Đơn #' + String(o.id).padStart(3, '0') + displayOrderCode + '</span>' +
                 statusBadge +
               '</div>' +
               '<div class="oc-time">Giờ tạo: ' + timeStr + ' · Nguồn: <b style="color:var(--red);text-transform:uppercase;">' + escapeHtml(o.orderSource) + '</b></div>' +
@@ -238,12 +240,12 @@ function triggerCamera(orderKey) {
   document.getElementById('cameraInput').click();
 }
 
-// Xử lý nén ảnh và gán Watermark Timestamp trực tiếp lên ảnh
+// BỘ ĐÓNG DẤU TIMESTAMP & MÃ ĐƠN POS TRỰC TIẾP LÊN ẢNH
 function handleImageCaptured(event) {
   var file = event.target.files[0];
   if (!file || !targetOrderIdForPhoto) return;
 
-  showToast('Đang đóng dấu thời gian & nén ảnh…');
+  showToast('Đang đóng dấu mã đơn & ngày giờ…');
   var reader = new FileReader();
   reader.onload = function(e) {
     var img = new Image();
@@ -252,50 +254,54 @@ function handleImageCaptured(event) {
       var MAX_WIDTH = 960;
       var scale = MAX_WIDTH / img.width;
       canvas.width = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width;
-      canvas.height = (img.width > MAX_WIDTH) ? (img.height * scale) : img.height;
+      canvas.height = (img.width > MAX_WIDTH) ? Math.round(img.height * scale) : img.height;
 
       var ctx = canvas.getContext('2d');
-      // 1. Vẽ ảnh gốc lên canvas
+      // 1. Vẽ ảnh chụp gốc
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // 2. Lấy thông tin đơn hàng và nhân viên
+      // 2. Lấy dữ liệu đơn hàng và mã nhập từ POS
       var curOrder = ordersMap[targetOrderIdForPhoto] || {};
       var staff = document.getElementById('barStaffName').value.trim() || 'Pha chế';
       var now = new Date();
       var dateStr = now.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit', year:'numeric'});
       var timeStr = now.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-      var orderCodeStr = curOrder.orderCode ? (' [' + curOrder.orderCode + ']') : '';
-      var sourceStr = (curOrder.orderSource || 'APP').toUpperCase();
+      
+      var sourceName = (curOrder.orderSource || 'APP').toUpperCase();
+      // ƯU TIÊN LẤY MÃ ĐƠN NHẬP TRÊN MÁY POS
+      var orderCodeToShow = curOrder.orderCode ? curOrder.orderCode : ('#' + String(curOrder.id || 0).padStart(3, '0'));
 
-      var line1 = 'HONGKONG BALEY QL50 — ' + sourceStr + ' #' + String(curOrder.id || 0).padStart(3, '0') + orderCodeStr;
-      var line2 = '⏰ ' + timeStr + ' ' + dateStr + '  |  👤 ' + staff;
+      var line1 = sourceName + ' - MÃ ĐƠN: ' + orderCodeToShow;
+      var line2 = '⏰ ' + timeStr + ' ' + dateStr + '  |  NV: ' + staff;
 
-      // 3. Vẽ dải mờ nền đen ở đáy ảnh
-      var barHeight = 48;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      // 3. Vẽ dải nền đen mờ ở chân ảnh
+      var barHeight = 60;
+      ctx.fillStyle = 'rgba(15, 20, 15, 0.82)';
       ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
 
-      // 4. Viết chữ thông tin và Timestamp
-      ctx.fillStyle = '#FFFFFF';
+      // 4. Viết chữ Watermark
       ctx.textBaseline = 'middle';
       
-      ctx.font = 'bold 15px "Be Vietnam Pro", sans-serif';
-      ctx.fillText(line1, 14, canvas.height - barHeight + 15);
+      // Dòng 1: Tên App + Mã đơn nhập trên máy POS (Màu vàng sáng)
+      ctx.fillStyle = '#FFC107';
+      ctx.font = 'bold 18px "JetBrains Mono", sans-serif';
+      ctx.fillText(line1, 16, canvas.height - barHeight + 19);
 
-      ctx.fillStyle = '#E8A33D'; // Màu vàng hổ phách nổi bật
-      ctx.font = '600 13px "JetBrains Mono", monospace';
-      ctx.fillText(line2, 14, canvas.height - barHeight + 34);
+      // Dòng 2: Timestamp ngày giờ giây + Nhân viên (Màu trắng)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '600 13.5px "Be Vietnam Pro", sans-serif';
+      ctx.fillText(line2, 16, canvas.height - barHeight + 43);
 
-      // 5. Xuất ra ảnh JPEG có sẵn timestamp
-      var compressedBase64 = canvas.toDataURL('image/jpeg', 0.78);
+      // 5. Xuất ra ảnh JPEG có chứa watermark
+      var stampedBase64 = canvas.toDataURL('image/jpeg', 0.8);
 
       db.ref('orders/' + targetOrderIdForPhoto).update({
-        photoBase64: compressedBase64,
+        photoBase64: stampedBase64,
         status: 'wait_photo',
         photoTime: Date.now()
       });
 
-      showToast('Đã gắn Timestamp vào ảnh thành công!');
+      showToast('Đã gắn Timestamp & Mã đơn vào ảnh!');
       event.target.value = '';
     };
     img.src = e.target.result;
@@ -306,7 +312,7 @@ function handleImageCaptured(event) {
 function finishOrder(orderKey) {
   var order = ordersMap[orderKey];
   if (!order || !order.photoBase64) {
-    alert('Bắt buộc phải chụp ảnh thành phẩm trước khi hoàn tất đơn App!');
+    alert('Vui lòng chụp ảnh trước khi hoàn tất!');
     return;
   }
 
@@ -343,8 +349,10 @@ function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
     return '• ' + it.name + ' × ' + it.qty + opt;
   }).join('\n');
 
+  var orderCodeStr = order.orderCode ? (' - Mã: ' + order.orderCode) : (' #' + String(order.id).padStart(3, '0'));
+
   var caption = [
-    '🛵 ĐƠN APP [' + order.orderSource.toUpperCase() + '] #' + String(order.id).padStart(3, '0') + (order.orderCode ? ' (' + order.orderCode + ')' : '') + ' — HOÀN TẤT',
+    '🛵 ĐƠN ' + (order.orderSource || 'APP').toUpperCase() + orderCodeStr + ' — HOÀN TẤT',
     '──────────',
     itemsText,
     '──────────',
