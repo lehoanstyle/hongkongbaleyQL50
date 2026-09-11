@@ -125,7 +125,6 @@ function renderOrders() {
   var listEl = document.getElementById('ordersList');
   var keys = Object.keys(ordersMap);
 
-  // Lọc chuẩn xác: Loại bỏ đơn tại quầy, giữ lại mọi đơn app (grab, shopee, be, xanh)
   var appKeys = keys.filter(function(k){
     var src = String(ordersMap[k].orderSource || '').toLowerCase().trim();
     return src !== '' && src !== 'store' && src !== 'tại quầy';
@@ -267,12 +266,13 @@ function handleImageCaptured(event) {
       var sourceName = (curOrder.orderSource || 'APP').toUpperCase();
       var orderCodeToShow = curOrder.orderCode ? curOrder.orderCode : ('#' + String(curOrder.id || 0).padStart(3, '0'));
 
-      var line1 = '● REC [CAM-01] ' + dateStr + ' ' + timeStr;
-      var line2 = sourceName + ' - MÃ ĐƠN: ' + orderCodeToShow + ' | NV: ' + staff;
-      var line3 = 'GPS: 10.7185° N, 106.6631° E | HONGKONG BALEY QL50';
+      // Đã bỏ dòng REC CAM, chỉ giữ lại thông tin đơn, ngày giờ, GPS và tên quán
+      var line1 = sourceName + ' - MÃ ĐƠN: ' + orderCodeToShow + ' | NV: ' + staff;
+      var line2 = 'TIME: ' + dateStr + ' ' + timeStr + ' | GPS: 10.7185° N, 106.6631° E';
+      var line3 = 'HONGKONG BALEY QL50 - VERIFIED ORIGINAL';
 
       ctx.textBaseline = 'bottom';
-      ctx.font = 'bold 19px "JetBrains Mono", "Courier New", monospace';
+      ctx.font = 'bold 18px "JetBrains Mono", "Courier New", monospace';
       
       function drawCameraText(text, x, y, color) {
         ctx.strokeStyle = '#000000';
@@ -288,9 +288,10 @@ function handleImageCaptured(event) {
       var startX = 20;
       var bottomY = canvas.height - 18;
 
+      // Vẽ 3 dòng thông tin ở chân ảnh (đã bỏ REC)
       drawCameraText(line3, startX, bottomY, '#E0E0E0');
-      drawCameraText(line2, startX, bottomY - 26, '#00FF66');
-      drawCameraText(line1, startX, bottomY - 52, '#FFBF00');
+      drawCameraText(line2, startX, bottomY - 26, '#FFBF00');
+      drawCameraText(line1, startX, bottomY - 52, '#00FF66');
 
       var stampedBase64 = canvas.toDataURL('image/jpeg', 0.85);
 
