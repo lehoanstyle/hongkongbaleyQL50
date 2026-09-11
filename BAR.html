@@ -238,11 +238,12 @@ function triggerCamera(orderKey) {
   document.getElementById('cameraInput').click();
 }
 
+// Xử lý nén ảnh và gán Watermark Timestamp trực tiếp lên ảnh
 function handleImageCaptured(event) {
   var file = event.target.files[0];
   if (!file || !targetOrderIdForPhoto) return;
 
-  showToast('Đang nén ảnh…');
+  showToast('Đang đóng dấu thời gian & nén ảnh…');
   var reader = new FileReader();
   reader.onload = function(e) {
     var img = new Image();
@@ -254,9 +255,39 @@ function handleImageCaptured(event) {
       canvas.height = (img.width > MAX_WIDTH) ? (img.height * scale) : img.height;
 
       var ctx = canvas.getContext('2d');
+      // 1. Vẽ ảnh gốc lên canvas
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      var compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+      // 2. Lấy thông tin đơn hàng và nhân viên
+      var curOrder = ordersMap[targetOrderIdForPhoto] || {};
+      var staff = document.getElementById('barStaffName').value.trim() || 'Pha chế';
+      var now = new Date();
+      var dateStr = now.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit', year:'numeric'});
+      var timeStr = now.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      var orderCodeStr = curOrder.orderCode ? (' [' + curOrder.orderCode + ']') : '';
+      var sourceStr = (curOrder.orderSource || 'APP').toUpperCase();
+
+      var line1 = 'HONGKONG BALEY QL50 — ' + sourceStr + ' #' + String(curOrder.id || 0).padStart(3, '0') + orderCodeStr;
+      var line2 = '⏰ ' + timeStr + ' ' + dateStr + '  |  👤 ' + staff;
+
+      // 3. Vẽ dải mờ nền đen ở đáy ảnh
+      var barHeight = 48;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
+
+      // 4. Viết chữ thông tin và Timestamp
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textBaseline = 'middle';
+      
+      ctx.font = 'bold 15px "Be Vietnam Pro", sans-serif';
+      ctx.fillText(line1, 14, canvas.height - barHeight + 15);
+
+      ctx.fillStyle = '#E8A33D'; // Màu vàng hổ phách nổi bật
+      ctx.font = '600 13px "JetBrains Mono", monospace';
+      ctx.fillText(line2, 14, canvas.height - barHeight + 34);
+
+      // 5. Xuất ra ảnh JPEG có sẵn timestamp
+      var compressedBase64 = canvas.toDataURL('image/jpeg', 0.78);
 
       db.ref('orders/' + targetOrderIdForPhoto).update({
         photoBase64: compressedBase64,
@@ -264,7 +295,7 @@ function handleImageCaptured(event) {
         photoTime: Date.now()
       });
 
-      showToast('Đã lưu ảnh!');
+      showToast('Đã gắn Timestamp vào ảnh thành công!');
       event.target.value = '';
     };
     img.src = e.target.result;
