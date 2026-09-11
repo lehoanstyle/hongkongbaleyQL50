@@ -341,12 +341,18 @@ function b64toBlob(dataURI) {
 }
 
 function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
-  // Lấy mã đơn nhập từ POS (nếu không có thì lấy số ID đơn)
   var orderCodeStr = order.orderCode ? order.orderCode : ('#' + String(order.id).padStart(3, '0'));
   var sourceStr = (order.orderSource || 'APP').toUpperCase();
 
-  // Caption rút gọn tối đa: chỉ gồm tên nguồn app và mã đơn
-  var caption = '📸 HÌNH ẢNH ĐƠN ' + sourceStr + ': ' + orderCodeStr;
+  // Định dạng thời gian nhận đơn và hoàn thành
+  var createdTimeStr = new Date(order.timestamp).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+  var finishedTimeStr = new Date(finishTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+  // Caption rút gọn, có đủ giờ nhận & giờ hoàn thành, đã bỏ tên nhân viên
+  var caption = [
+    '📸 HÌNH ẢNH ĐƠN ' + sourceStr + ': ' + orderCodeStr,
+    '⏱️ Nhận đơn: ' + createdTimeStr + '  |  ✅ Hoàn thành: ' + finishedTimeStr
+  ].join('\n');
 
   var formData = new FormData();
   formData.append('chat_id', TG_CHAT_ID);
@@ -366,6 +372,7 @@ function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
   }).catch(function(){
     markPendingTelegram(orderKey);
   });
+}
 }
 function markPendingTelegram(orderKey) {
   var pending = JSON.parse(localStorage.getItem('pending_telegrams') || '[]');
