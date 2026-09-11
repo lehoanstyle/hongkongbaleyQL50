@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pha Chế — HongKong Baley QL50</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<!-- Firebase App & Database SDK -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<style>
+  :root {
+    --bg:#F3F1E7; --surface:#FFFFFF; --ink:#2B2620; --ink-soft:#7A7061;
+    --pine:#1F3D2B; --pine-soft:#33553D; --amber:#E8A33D; --red:#C1392B; --line:#DED7C2;
+  }
+  * { box-sizing: border-box; margin:0; padding:0; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--ink); font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; padding-bottom: 30px; }
+  .topbar { background: var(--pine); color: #fff; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; position: sticky; top:0; z-index: 100; }
+  .topbar h1 { font-size: 15px; font-weight: 800; }
+  .topbar h1 span { color: var(--amber); }
+  .staff-box { font-size: 11px; display: flex; align-items: center; gap: 6px; }
+  .staff-box input { padding: 4px 8px; border-radius: 4px; border: none; font-size: 11px; font-weight: 700; width: 90px; }
+  
+  .filter-tabs { display: flex; background: #fff; border-bottom: 1px solid var(--line); overflow-x: auto; position: sticky; top: 46px; z-index: 99; }
+  .ftab { flex: 1; padding: 10px; text-align: center; font-weight: 700; font-size: 12px; border: none; background: none; color: var(--ink-soft); cursor: pointer; white-space: nowrap; }
+  .ftab.active { color: var(--pine); border-bottom: 3px solid var(--pine); }
+
+  .order-container { padding: 12px; display: flex; flex-direction: column; gap: 12px; max-width: 600px; margin: 0 auto; }
+  .order-card { background: #fff; border: 1.5px solid var(--line); border-radius: 10px; padding: 12px; box-shadow: 0 2px 4px rgba(0,0,0,.04); }
+  .order-card.status-new { border-left: 6px solid var(--amber); }
+  .order-card.status-processing { border-left: 6px solid #2980B9; }
+  .order-card.status-photo { border-left: 6px solid #8E44AD; }
+  .order-card.status-done { border-left: 6px solid #27AE60; opacity: 0.85; }
+
+  .oc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .oc-id { font-size: 16px; font-weight: 800; color: var(--pine); font-family: 'JetBrains Mono', monospace; }
+  .oc-badge { padding: 3px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; }
+  .badge-new { background: #FEF5E7; color: #D35400; }
+  .badge-accepted { background: #E8F4F8; color: #2980B9; }
+  .badge-making { background: #EAF2F8; color: #1B4F72; }
+  .badge-wait-photo { background: #F4ECF7; color: #8E44AD; }
+  .badge-done { background: #EAFAF1; color: #27AE60; }
+
+  .oc-time { font-size: 11px; color: var(--ink-soft); margin-bottom: 8px; }
+  .oc-items { border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); padding: 8px 0; margin-bottom: 8px; }
+  .oc-item-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; font-weight: 700; }
+  .oc-item-opts { font-size: 11px; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; padding-left: 8px; line-height: 1.25; }
+  
+  .photo-preview-wrap { margin-top: 8px; text-align: center; }
+  .photo-preview { width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+
+  .oc-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .oc-actions button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .btn-accept { background: #2980B9; color: #fff; }
+  .btn-making { background: #D35400; color: #fff; }
+  .btn-camera { background: #8E44AD; color: #fff; }
+  .btn-complete { background: #27AE60; color: #fff; }
+  .btn-camera-retake { background: #EAE6D9; color: var(--ink); border: 1px solid var(--line) !important; flex: 0.5 !important; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #2B2620; color: #fff; padding: 8px 18px; border-radius: 999px; font-size: 12px; font-weight: 700; z-index: 99999; display: none; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>HongKong <span>Baley</span> — Pha Chế</h1>
+  <div class="staff-box">
+    <span>NV:</span>
+    <input type="text" id="barStaffName" value="Pha Chế 1" onchange="localStorage.setItem('bar_staff', this.value)">
+  </div>
+</div>
+
+<div class="filter-tabs">
+  <button class="ftab active" onclick="setFilter('pending', this)">Đang chờ làm</button>
+  <button class="ftab" onclick="setFilter('completed', this)">Đã hoàn tất</button>
+</div>
+
+<div class="order-container" id="ordersList">
+  <div style="text-align:center;padding:40px;color:var(--ink-soft);">Đang kết nối đơn hàng từ máy POS…</div>
+</div>
+
+<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleImageCaptured(event)">
+<div class="toast" id="toast"></div>
+
+<script>
+var firebaseConfig = {
+  databaseURL: "https://hongkong-baley-pos-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+
+var TG_TOKEN = '8984819039:AAHjDAFs9aiHK2R3M6cR2hgssAq3SuYInKE';
+var TG_CHAT_ID = '6153471974';
+
+var currentFilter = 'pending';
+var ordersMap = {};
+var targetOrderIdForPhoto = null;
+
+var savedStaff = localStorage.getItem('bar_staff');
+if(savedStaff) document.getElementById('barStaffName').value = savedStaff;
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(function(){ t.style.display = 'none'; }, 2200);
+}
+
+function setFilter(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.ftab').forEach(function(b){ b.classList.remove('active'); });
+  el.classList.add('active');
+  renderOrders();
+}
+
+db.ref('orders').limitToLast(50).on('value', function(snapshot) {
+  ordersMap = snapshot.val() || {};
+  renderOrders();
+  retryPendingTelegrams();
+});
+
+function renderOrders() {
+  var listEl = document.getElementById('ordersList');
+  var keys = Object.keys(ordersMap);
+
+  if (keys.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-soft);">Chưa có đơn hàng nào từ quầy POS.</div>';
+    return;
+  }
+
+  keys.sort(function(a, b) {
+    return (ordersMap[b].timestamp || 0) - (ordersMap[a].timestamp || 0);
+  });
+
+  var filteredKeys = keys.filter(function(key) {
+    var o = ordersMap[key];
+    var isDone = (o.status === 'completed');
+    return currentFilter === 'completed' ? isDone : !isDone;
+  });
+
+  if (filteredKeys.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-soft);">Không có đơn hàng ở mục này.</div>';
+    return;
+  }
+
+  var html = '';
+  filteredKeys.forEach(function(key) {
+    var o = ordersMap[key];
+    var status = o.status || 'new';
+    var statusBadge = '';
+    var statusClass = '';
+
+    if (status === 'new') {
+      statusBadge = '<span class="oc-badge badge-new">🟡 Đơn mới</span>';
+      statusClass = 'status-new';
+    } else if (status === 'accepted') {
+      statusBadge = '<span class="oc-badge badge-accepted">🔵 Đã nhận</span>';
+      statusClass = 'status-processing';
+    } else if (status === 'making') {
+      statusBadge = '<span class="oc-badge badge-making">🟠 Đang làm</span>';
+      statusClass = 'status-processing';
+    } else if (status === 'wait_photo') {
+      statusBadge = '<span class="oc-badge badge-wait-photo">📷 Chờ chụp ảnh</span>';
+      statusClass = 'status-photo';
+    } else if (status === 'completed') {
+      statusBadge = '<span class="oc-badge badge-done">🟢 Hoàn tất</span>';
+      statusClass = 'status-done';
+    }
+
+    var timeStr = new Date(o.timestamp).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+
+    var itemsHtml = '';
+    (o.items || []).forEach(function(it) {
+      itemsHtml += '<div class="oc-item-row"><span>' + escapeHtml(it.name) + '</span><span>× ' + it.qty + '</span></div>';
+      if (it.optionsLabel) {
+        itemsHtml += '<div class="oc-item-opts">' + escapeHtml(it.optionsLabel) + '</div>';
+      }
+    });
+
+    var actionHtml = '';
+    if (status === 'new') {
+      actionHtml = '<button type="button" class="btn-accept" onclick="updateOrderStatus(\'' + key + '\', \'accepted\')">🔵 Nhận đơn</button>';
+    } else if (status === 'accepted') {
+      actionHtml = '<button type="button" class="btn-making" onclick="updateOrderStatus(\'' + key + '\', \'making\')">🟠 Bắt đầu làm</button>';
+    } else if (status === 'making') {
+      actionHtml = '<button type="button" class="btn-camera" onclick="triggerCamera(\'' + key + '\')">📷 Chụp ảnh thành phẩm</button>';
+    } else if (status === 'wait_photo') {
+      actionHtml = '<button type="button" class="btn-camera-retake" onclick="triggerCamera(\'' + key + '\')">Chụp lại</button>' +
+                   '<button type="button" class="btn-complete" onclick="finishOrder(\'' + key + '\')">✅ HOÀN TẤT ĐƠN</button>';
+    } else if (status === 'completed') {
+      actionHtml = '<div style="font-size:11.5px;color:var(--pine-soft);font-weight:700;">Đã gửi Telegram: ' + (o.telegramSent ? '✅ Đã gửi' : '⏳ Đang chờ mạng') + '</div>';
+    }
+
+    var photoHtml = '';
+    if (o.photoBase64) {
+      photoHtml = '<div class="photo-preview-wrap"><img src="' + o.photoBase64 + '" class="photo-preview" alt="Ảnh thành phẩm"></div>';
+    }
+
+    html += '<div class="order-card ' + statusClass + '">' +
+              '<div class="oc-header">' +
+                '<span class="oc-id">Đơn #' + String(o.id).padStart(3, '0') + (o.orderCode ? ' (' + escapeHtml(o.orderCode) + ')' : '') + '</span>' +
+                statusBadge +
+              '</div>' +
+              '<div class="oc-time">Giờ tạo: ' + timeStr + ' · Nguồn: ' + escapeHtml(o.orderSource || 'Tại quầy') + '</div>' +
+              '<div class="oc-items">' + itemsHtml + '</div>' +
+              photoHtml +
+              '<div class="oc-actions">' + actionHtml + '</div>' +
+            '</div>';
+  });
+
+  listEl.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s||'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+}
+
+function updateOrderStatus(orderKey, status) {
+  var staff = document.getElementById('barStaffName').value.trim() || 'Pha chế';
+  db.ref('orders/' + orderKey).update({
+    status: status,
+    barStaff: staff
+  });
+}
+
+function triggerCamera(orderKey) {
+  targetOrderIdForPhoto = orderKey;
+  document.getElementById('cameraInput').click();
+}
+
+function handleImageCaptured(event) {
+  var file = event.target.files[0];
+  if (!file || !targetOrderIdForPhoto) return;
+
+  showToast('Đang nén ảnh…');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var MAX_WIDTH = 960;
+      var scale = MAX_WIDTH / img.width;
+      canvas.width = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width;
+      canvas.height = (img.width > MAX_WIDTH) ? (img.height * scale) : img.height;
+
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      var compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+
+      db.ref('orders/' + targetOrderIdForPhoto).update({
+        photoBase64: compressedBase64,
+        status: 'wait_photo',
+        photoTime: Date.now()
+      });
+
+      showToast('Đã lưu ảnh thành phẩm!');
+      event.target.value = '';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function finishOrder(orderKey) {
+  var order = ordersMap[orderKey];
+  if (!order || !order.photoBase64) {
+    alert('Vui lòng chụp ảnh thành phẩm trước khi hoàn tất!');
+    return;
+  }
+
+  var staff = document.getElementById('barStaffName').value.trim() || 'Pha chế';
+  var finishTime = Date.now();
+
+  db.ref('orders/' + orderKey).update({
+    status: 'completed',
+    completedAt: finishTime,
+    barStaff: staff,
+    telegramSent: false
+  });
+
+  sendTelegramWithPhoto(orderKey, order, staff, finishTime);
+}
+
+function b64toBlob(dataURI) {
+  var byteString = atob(dataURI.split(',')[1]);
+  var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+  var ab = new ArrayBuffer(byteString.length);
+  var ia = new Uint8Array(ab);
+  for (var i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], {type: mimeString});
+}
+
+function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
+  var timeStr = new Date(finishTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+  var totalCups = (order.items || []).reduce(function(sum, it){ return sum + it.qty; }, 0);
+
+  var itemsText = (order.items || []).map(function(it){
+    var opt = it.optionsLabel ? ' (' + it.optionsLabel + ')' : '';
+    return '• ' + it.name + ' × ' + it.qty + opt;
+  }).join('\n');
+
+  var caption = [
+    '🧋 ĐƠN #' + String(order.id).padStart(3, '0') + (order.orderCode ? ' [' + order.orderCode + ']' : '') + ' — HOÀN TẤT',
+    '──────────',
+    itemsText,
+    '──────────',
+    '🥤 Tổng: ' + totalCups + ' ly',
+    '👤 Pha chế: ' + staff,
+    '🕐 Hoàn thành: ' + timeStr
+  ].join('\n');
+
+  var formData = new FormData();
+  formData.append('chat_id', TG_CHAT_ID);
+  formData.append('caption', caption);
+  formData.append('photo', b64toBlob(order.photoBase64), 'order_' + order.id + '.jpg');
+
+  fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendPhoto', {
+    method: 'POST',
+    body: formData
+  }).then(function(res){ return res.json(); }).then(function(data){
+    if (data.ok) {
+      db.ref('orders/' + orderKey).update({ telegramSent: true });
+      showToast('Đã gửi ảnh lên Telegram!');
+    } else {
+      markPendingTelegram(orderKey);
+    }
+  }).catch(function(){
+    markPendingTelegram(orderKey);
+  });
+}
+
+function markPendingTelegram(orderKey) {
+  var pending = JSON.parse(localStorage.getItem('pending_telegrams') || '[]');
+  if (pending.indexOf(orderKey) === -1) {
+    pending.push(orderKey);
+    localStorage.setItem('pending_telegrams', JSON.stringify(pending));
+  }
+  showToast('Đã lưu hàng đợi gửi Telegram');
+}
+
+function retryPendingTelegrams() {
+  var pending = JSON.parse(localStorage.getItem('pending_telegrams') || '[]');
+  if (pending.length === 0) return;
+
+  pending.slice().forEach(function(key) {
+    var order = ordersMap[key];
+    if (order && order.photoBase64 && !order.telegramSent) {
+      sendTelegramWithPhoto(key, order, order.barStaff || 'Pha chế', order.completedAt || Date.now());
+      pending = pending.filter(function(k){ return k !== key; });
+      localStorage.setItem('pending_telegrams', JSON.stringify(pending));
+    }
+  });
+}
+
+window.addEventListener('online', retryPendingTelegrams);
+</script>
+</body>
+</html>
