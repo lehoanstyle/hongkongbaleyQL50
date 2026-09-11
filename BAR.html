@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Pha Chế — HongKong Baley QL50</title>
+<title>Pha Chế Đơn App — HongKong Baley QL50</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
@@ -65,7 +65,7 @@
 <body>
 
 <div class="topbar">
-  <h1>HongKong <span>Baley</span> — Pha Chế</h1>
+  <h1>HongKong <span>Baley</span> — Đơn App</h1>
   <div class="staff-box">
     <span>NV:</span>
     <input type="text" id="barStaffName" value="Pha Chế 1" onchange="localStorage.setItem('bar_staff', this.value)">
@@ -73,12 +73,12 @@
 </div>
 
 <div class="filter-tabs">
-  <button class="ftab active" onclick="setFilter('pending', this)">Đang chờ làm</button>
+  <button class="ftab active" onclick="setFilter('pending', this)">Chờ pha &amp; chụp ảnh</button>
   <button class="ftab" onclick="setFilter('completed', this)">Đã hoàn tất</button>
 </div>
 
 <div class="order-container" id="ordersList">
-  <div style="text-align:center;padding:40px;color:var(--ink-soft);">Đang kết nối đơn hàng từ máy POS…</div>
+  <div style="text-align:center;padding:40px;color:var(--ink-soft);">Đang chờ đơn hàng từ các App giao hàng…</div>
 </div>
 
 <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleImageCaptured(event)">
@@ -125,16 +125,22 @@ function renderOrders() {
   var listEl = document.getElementById('ordersList');
   var keys = Object.keys(ordersMap);
 
-  if (keys.length === 0) {
-    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-soft);">Chưa có đơn hàng nào từ quầy POS.</div>';
+  // LỌC BỎ HOÀN TOÀN ĐƠN TẠI QUẦY (chỉ giữ đơn Grab, Shopee, Be, Xanh)
+  var appKeys = keys.filter(function(k){
+    var src = ordersMap[k].orderSource;
+    return src && src !== 'store' && src !== 'Tại quầy';
+  });
+
+  if (appKeys.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-soft);">Chưa có đơn hàng nào từ Grab, Shopee, Be hoặc Xanh.</div>';
     return;
   }
 
-  keys.sort(function(a, b) {
+  appKeys.sort(function(a, b) {
     return (ordersMap[b].timestamp || 0) - (ordersMap[a].timestamp || 0);
   });
 
-  var filteredKeys = keys.filter(function(key) {
+  var filteredKeys = appKeys.filter(function(key) {
     var o = ordersMap[key];
     var isDone = (o.status === 'completed');
     return currentFilter === 'completed' ? isDone : !isDone;
@@ -149,7 +155,6 @@ function renderOrders() {
   filteredKeys.forEach(function(key) {
     var o = ordersMap[key];
     var status = o.status || 'new';
-    var isStoreOrder = (o.orderSource === 'store' || o.orderSource === 'Tại quầy');
 
     var statusBadge = '';
     var statusClass = '';
@@ -181,25 +186,19 @@ function renderOrders() {
       }
     });
 
+    // Đơn App bắt buộc phải có ảnh mới cho hoàn tất
     var actionHtml = '';
     if (status === 'new') {
       actionHtml = '<button type="button" class="btn-accept" onclick="updateOrderStatus(\'' + key + '\', \'accepted\')">🔵 Nhận đơn</button>';
     } else if (status === 'accepted') {
       actionHtml = '<button type="button" class="btn-making" onclick="updateOrderStatus(\'' + key + '\', \'making\')">🟠 Bắt đầu làm</button>';
     } else if (status === 'making') {
-      if (isStoreOrder) {
-        // ĐƠN TẠI QUẦY: Cho phép Hoàn tất ngay, không bắt buộc chụp
-        actionHtml = '<button type="button" class="btn-camera" style="background:#7F8C8D;flex:0.6;" onclick="triggerCamera(\'' + key + '\')">📷 Chụp (nếu cần)</button>' +
-                     '<button type="button" class="btn-complete" onclick="finishOrder(\'' + key + '\')">✅ HOÀN TẤT ĐƠN</button>';
-      } else {
-        // ĐƠN APP: Bắt buộc chụp ảnh trước
-        actionHtml = '<button type="button" class="btn-camera" onclick="triggerCamera(\'' + key + '\')">📷 Chụp ảnh (Bắt buộc đơn App)</button>';
-      }
+      actionHtml = '<button type="button" class="btn-camera" onclick="triggerCamera(\'' + key + '\')">📷 Chụp ảnh thành phẩm (Bắt buộc)</button>';
     } else if (status === 'wait_photo') {
       actionHtml = '<button type="button" class="btn-camera-retake" onclick="triggerCamera(\'' + key + '\')">Chụp lại</button>' +
-                   '<button type="button" class="btn-complete" onclick="finishOrder(\'' + key + '\')">✅ HOÀN TẤT ĐƠN</button>';
+                   '<button type="button" class="btn-complete" onclick="finishOrder(\'' + key + '\')">✅ HOÀN TẤT &amp; GỬI TELEGRAM</button>';
     } else if (status === 'completed') {
-      actionHtml = '<div style="font-size:11.5px;color:var(--pine-soft);font-weight:700;">Đã gửi Telegram: ' + (o.telegramSent ? '✅ Đã gửi' : '⏳ Đang chờ mạng') + '</div>';
+      actionHtml = '<div style="font-size:11.5px;color:var(--pine-soft);font-weight:700;">Đã gửi Telegram: ' + (o.telegramSent ? '✅ Đã gửi kèm ảnh' : '⏳ Đang chờ kết nối') + '</div>';
     }
 
     var photoHtml = '';
@@ -209,10 +208,10 @@ function renderOrders() {
 
     html += '<div class="order-card ' + statusClass + '">' +
               '<div class="oc-header">' +
-                '<span class="oc-id">Đơn #' + String(o.id).padStart(3, '0') + (o.orderCode ? ' (' + escapeHtml(o.orderCode) + ')' : '') + '</span>' +
+                '<span class="oc-id">Đơn #' + String(o.id).padStart(3, '0') + (o.orderCode ? ' [' + escapeHtml(o.orderCode) + ']' : '') + '</span>' +
                 statusBadge +
               '</div>' +
-              '<div class="oc-time">Giờ tạo: ' + timeStr + ' · Nguồn: <b>' + escapeHtml(isStoreOrder ? 'Tại quầy (Không bắt buộc chụp)' : o.orderSource) + '</b></div>' +
+              '<div class="oc-time">Giờ tạo: ' + timeStr + ' · Nguồn: <b style="color:var(--red);text-transform:uppercase;">' + escapeHtml(o.orderSource) + '</b></div>' +
               '<div class="oc-items">' + itemsHtml + '</div>' +
               photoHtml +
               '<div class="oc-actions">' + actionHtml + '</div>' +
@@ -275,13 +274,8 @@ function handleImageCaptured(event) {
 
 function finishOrder(orderKey) {
   var order = ordersMap[orderKey];
-  if (!order) return;
-
-  var isStoreOrder = (order.orderSource === 'store' || order.orderSource === 'Tại quầy');
-
-  // Đơn App bắt buộc phải có ảnh thành phẩm
-  if (!isStoreOrder && !order.photoBase64) {
-    alert('Đơn App (Grab, Shopee, Be, Xanh) bắt buộc phải chụp ảnh thành phẩm trước khi hoàn tất!');
+  if (!order || !order.photoBase64) {
+    alert('Bắt buộc phải chụp ảnh thành phẩm trước khi hoàn tất đơn App!');
     return;
   }
 
@@ -295,12 +289,7 @@ function finishOrder(orderKey) {
     telegramSent: false
   });
 
-  // Nếu có ảnh -> gửi Photo kèm Caption; Nếu không có ảnh -> gửi Text thông báo
-  if (order.photoBase64) {
-    sendTelegramWithPhoto(orderKey, order, staff, finishTime);
-  } else {
-    sendTelegramTextOnly(orderKey, order, staff, finishTime);
-  }
+  sendTelegramWithPhoto(orderKey, order, staff, finishTime);
 }
 
 function b64toBlob(dataURI) {
@@ -324,7 +313,7 @@ function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
   }).join('\n');
 
   var caption = [
-    '🧋 ĐƠN #' + String(order.id).padStart(3, '0') + (order.orderCode ? ' [' + order.orderCode + ']' : '') + ' — HOÀN TẤT',
+    '🛵 ĐƠN APP [' + order.orderSource.toUpperCase() + '] #' + String(order.id).padStart(3, '0') + (order.orderCode ? ' (' + order.orderCode + ')' : '') + ' — HOÀN TẤT',
     '──────────',
     itemsText,
     '──────────',
@@ -353,41 +342,6 @@ function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
   });
 }
 
-function sendTelegramTextOnly(orderKey, order, staff, finishTime) {
-  var timeStr = new Date(finishTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
-  var totalCups = (order.items || []).reduce(function(sum, it){ return sum + it.qty; }, 0);
-
-  var itemsText = (order.items || []).map(function(it){
-    var opt = it.optionsLabel ? ' (' + it.optionsLabel + ')' : '';
-    return '• ' + it.name + ' × ' + it.qty + opt;
-  }).join('\n');
-
-  var text = [
-    '🧋 ĐƠN TẠI QUẦY #' + String(order.id).padStart(3, '0') + ' — HOÀN TẤT',
-    '──────────',
-    itemsText,
-    '──────────',
-    '🥤 Tổng: ' + totalCups + ' ly',
-    '👤 Pha chế: ' + staff,
-    '🕐 Hoàn thành: ' + timeStr
-  ].join('\n');
-
-  fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendMessage', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: TG_CHAT_ID, text: text })
-  }).then(function(res){ return res.json(); }).then(function(data){
-    if (data.ok) {
-      db.ref('orders/' + orderKey).update({ telegramSent: true });
-      showToast('Đã báo hoàn tất lên Telegram!');
-    } else {
-      markPendingTelegram(orderKey);
-    }
-  }).catch(function(){
-    markPendingTelegram(orderKey);
-  });
-}
-
 function markPendingTelegram(orderKey) {
   var pending = JSON.parse(localStorage.getItem('pending_telegrams') || '[]');
   if (pending.indexOf(orderKey) === -1) {
@@ -403,12 +357,8 @@ function retryPendingTelegrams() {
 
   pending.slice().forEach(function(key) {
     var order = ordersMap[key];
-    if (order && !order.telegramSent) {
-      if (order.photoBase64) {
-        sendTelegramWithPhoto(key, order, order.barStaff || 'Pha chế', order.completedAt || Date.now());
-      } else {
-        sendTelegramTextOnly(key, order, order.barStaff || 'Pha chế', order.completedAt || Date.now());
-      }
+    if (order && order.photoBase64 && !order.telegramSent) {
+      sendTelegramWithPhoto(key, order, order.barStaff || 'Pha chế', order.completedAt || Date.now());
       pending = pending.filter(function(k){ return k !== key; });
       localStorage.setItem('pending_telegrams', JSON.stringify(pending));
     }
