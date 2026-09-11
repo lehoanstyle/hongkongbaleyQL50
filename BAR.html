@@ -125,10 +125,10 @@ function renderOrders() {
   var listEl = document.getElementById('ordersList');
   var keys = Object.keys(ordersMap);
 
-  // Chỉ lấy đơn từ App (Grab, Shopee, Be, Xanh)
+  // Lọc chuẩn xác: Loại bỏ đơn tại quầy, giữ lại mọi đơn app (grab, shopee, be, xanh)
   var appKeys = keys.filter(function(k){
-    var src = ordersMap[k].orderSource;
-    return src && src !== 'store' && src !== 'Tại quầy';
+    var src = String(ordersMap[k].orderSource || '').toLowerCase().trim();
+    return src !== '' && src !== 'store' && src !== 'tại quầy';
   });
 
   if (appKeys.length === 0) {
@@ -205,7 +205,6 @@ function renderOrders() {
       photoHtml = '<div class="photo-preview-wrap"><img src="' + o.photoBase64 + '" class="photo-preview" alt="Ảnh thành phẩm"></div>';
     }
 
-    // Hiển thị mã đơn app được nhập từ POS
     var displayOrderCode = o.orderCode ? (' [MÃ: ' + escapeHtml(o.orderCode) + ']') : '';
 
     html += '<div class="order-card ' + statusClass + '">' +
@@ -240,7 +239,6 @@ function triggerCamera(orderKey) {
   document.getElementById('cameraInput').click();
 }
 
-// BỘ ĐÓNG DẤU TIMESTAMP & MÃ ĐƠN POS TRỰC TIẾP LÊN ẢNH
 function handleImageCaptured(event) {
   var file = event.target.files[0];
   if (!file || !targetOrderIdForPhoto) return;
@@ -251,49 +249,50 @@ function handleImageCaptured(event) {
     var img = new Image();
     img.onload = function() {
       var canvas = document.createElement('canvas');
-      var MAX_WIDTH = 960;
+      var MAX_WIDTH = 1080;
       var scale = MAX_WIDTH / img.width;
       canvas.width = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width;
       canvas.height = (img.width > MAX_WIDTH) ? Math.round(img.height * scale) : img.height;
 
       var ctx = canvas.getContext('2d');
-      // 1. Vẽ ảnh chụp gốc
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // 2. Lấy dữ liệu đơn hàng và mã nhập từ POS
       var curOrder = ordersMap[targetOrderIdForPhoto] || {};
       var staff = document.getElementById('barStaffName').value.trim() || 'Pha chế';
-      var now = new Date();
-      var dateStr = now.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit', year:'numeric'});
-      var timeStr = now.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
       
+      var now = new Date();
+      var dateStr = now.toLocaleDateString('vi-VN', {year:'numeric', month:'2-digit', day:'2-digit'});
+      var timeStr = now.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
       var sourceName = (curOrder.orderSource || 'APP').toUpperCase();
-      // ƯU TIÊN LẤY MÃ ĐƠN NHẬP TRÊN MÁY POS
       var orderCodeToShow = curOrder.orderCode ? curOrder.orderCode : ('#' + String(curOrder.id || 0).padStart(3, '0'));
 
-      var line1 = sourceName + ' - MÃ ĐƠN: ' + orderCodeToShow;
-      var line2 = '⏰ ' + timeStr + ' ' + dateStr + '  |  NV: ' + staff;
+      var line1 = '● REC [CAM-01] ' + dateStr + ' ' + timeStr;
+      var line2 = sourceName + ' - MÃ ĐƠN: ' + orderCodeToShow + ' | NV: ' + staff;
+      var line3 = 'GPS: 10.7185° N, 106.6631° E | HONGKONG BALEY QL50';
 
-      // 3. Vẽ dải nền đen mờ ở chân ảnh
-      var barHeight = 60;
-      ctx.fillStyle = 'rgba(15, 20, 15, 0.82)';
-      ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
-
-      // 4. Viết chữ Watermark
-      ctx.textBaseline = 'middle';
+      ctx.textBaseline = 'bottom';
+      ctx.font = 'bold 19px "JetBrains Mono", "Courier New", monospace';
       
-      // Dòng 1: Tên App + Mã đơn nhập trên máy POS (Màu vàng sáng)
-      ctx.fillStyle = '#FFC107';
-      ctx.font = 'bold 18px "JetBrains Mono", sans-serif';
-      ctx.fillText(line1, 16, canvas.height - barHeight + 19);
+      function drawCameraText(text, x, y, color) {
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'miter';
+        ctx.miterLimit = 2;
+        ctx.strokeText(text, x, y);
 
-      // Dòng 2: Timestamp ngày giờ giây + Nhân viên (Màu trắng)
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '600 13.5px "Be Vietnam Pro", sans-serif';
-      ctx.fillText(line2, 16, canvas.height - barHeight + 43);
+        ctx.fillStyle = color;
+        ctx.fillText(text, x, y);
+      }
 
-      // 5. Xuất ra ảnh JPEG có chứa watermark
-      var stampedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+      var startX = 20;
+      var bottomY = canvas.height - 18;
+
+      drawCameraText(line3, startX, bottomY, '#E0E0E0');
+      drawCameraText(line2, startX, bottomY - 26, '#00FF66');
+      drawCameraText(line1, startX, bottomY - 52, '#FFBF00');
+
+      var stampedBase64 = canvas.toDataURL('image/jpeg', 0.85);
 
       db.ref('orders/' + targetOrderIdForPhoto).update({
         photoBase64: stampedBase64,
@@ -301,7 +300,7 @@ function handleImageCaptured(event) {
         photoTime: Date.now()
       });
 
-      showToast('Đã gắn Timestamp & Mã đơn vào ảnh!');
+      showToast('Đã gắn Timestamp camera lên ảnh!');
       event.target.value = '';
     };
     img.src = e.target.result;
@@ -344,11 +343,9 @@ function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
   var orderCodeStr = order.orderCode ? order.orderCode : ('#' + String(order.id).padStart(3, '0'));
   var sourceStr = (order.orderSource || 'APP').toUpperCase();
 
-  // Định dạng thời gian nhận đơn và hoàn thành
   var createdTimeStr = new Date(order.timestamp).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
   var finishedTimeStr = new Date(finishTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
 
-  // Caption rút gọn, có đủ giờ nhận & giờ hoàn thành, đã bỏ tên nhân viên
   var caption = [
     '📸 HÌNH ẢNH ĐƠN ' + sourceStr + ': ' + orderCodeStr,
     '⏱️ Nhận đơn: ' + createdTimeStr + '  |  ✅ Hoàn thành: ' + finishedTimeStr
@@ -373,7 +370,7 @@ function sendTelegramWithPhoto(orderKey, order, staff, finishTime) {
     markPendingTelegram(orderKey);
   });
 }
-}
+
 function markPendingTelegram(orderKey) {
   var pending = JSON.parse(localStorage.getItem('pending_telegrams') || '[]');
   if (pending.indexOf(orderKey) === -1) {
